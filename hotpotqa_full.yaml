@@ -28,12 +28,12 @@ method2index:
 data_dir: "/shared/data3/yichi9/FlashRAG_datasets"
 save_dir: "/shared/data3/yichi9/FlashRAG_output/"
 
-gpu_id: "0"
+gpu_id: "1,"
 dataset_name: "hotpotqa" # name of the dataset in data_dir
 split: ["dev"]  # dataset split to load (e.g. train,dev,test)
 
 # Sampling configurations for testing
-test_sample_num: 300  # number of samples to test (only work in dev/test split), if None, test all samples
+test_sample_num: ~  # number of samples to test (only work in dev/test split), if None, test all samples
 random_sample: False # whether to randomly sample the test samples
 
 # Seed for reproducibility
@@ -41,24 +41,26 @@ seed: 2024
 
 # Whether save intermediate data
 save_intermediate_data: True
-save_note: 'experiment'
+save_note: 'Baseline'
 
 # -------------------------------------------------Retrieval Settings------------------------------------------------#
 # If set the name, the model path will be find in global paths
 retrieval_method: "e5"  # name or path of the retrieval model. 
 retrieval_model_path: "intfloat/e5-base-v2" # path to the retrieval model
-index_path: "/home/yichi9/JH/quick_start/indexes/e5_Flat.index" # set automatically if not provided. 
+index_path: "/shared/data3/yichi9/FlashRAG_indexes/e5_Flat.index" # set automatically if not provided. 
 faiss_gpu: False # whether use gpu to hold index
-corpus_path: "/home/yichi9/JH/quick_start/indexes/general_knowledge.jsonl"  # path to corpus in '.jsonl' format that store the documents
+corpus_path: "/shared/data3/yichi9/FlashRAG_datasets/retrieval-corpus/wiki-18.jsonl"  # path to corpus in '.jsonl' format that store the documents
 
 instruction: "passage: " # instruction for the retrieval model
 retrieval_topk: 5 # number of retrieved documents
 retrieval_batch_size: 256  # batch size for retrieval
 retrieval_use_fp16: True  # whether to use fp16 for retriAFeval model
 retrieval_query_max_length: 128  # max length of the query
+
 save_retrieval_cache: False # whether to save the retrieval cache
 use_retrieval_cache: False # whether to use the retrieval cache
-retrieval_cache_path: ~ # path to the retrieval cache
+retrieval_cache_path: "/shared/data3/yichi9/FlashRAG_output/hotpotqa_2024_11_03_23_59_Baseline/retrieval_cache.json" # path to the retrieval cache
+
 retrieval_pooling_method: ~ # set automatically if not provided
 bm25_backend: bm25s # pyserini, bm25s
 use_sentence_transformer: False
@@ -74,14 +76,14 @@ rerank_use_fp16: True
 
 # -------------------------------------------------Generator Settings------------------------------------------------#
 framework: vllm # inference frame work of LLM, supporting: 'hf','vllm','fschat', 'openai'
-generator_model: "meta-llama/Meta-Llama-3-8B" # name or path of the generator model
+generator_model: "mistralai/Mistral-7B-Instruct-v0.2" # name or path of the generator model
 # setting for openai model, only valid in openai framework
 openai_setting:
   api_key: ~
   base_url: ~
 
 generator_model_path: ~
-generator_max_input_len: 1024  # max length of the input
+generator_max_input_len: 2048  # max length of the input
 generator_batch_size: 4 # batch size for generation, invalid for vllm
 generation_params:  
   #do_sample: false

@@ -28,12 +28,12 @@ method2index:
 data_dir: "/shared/data3/yichi9/FlashRAG_datasets"
 save_dir: "/shared/data3/yichi9/FlashRAG_output/"
 
-gpu_id: "5"
+gpu_id: "1,"
 dataset_name: "hotpotqa" # name of the dataset in data_dir
 split: ["dev"]  # dataset split to load (e.g. train,dev,test)
 
 # Sampling configurations for testing
-test_sample_num: 100  # number of samples to test (only work in dev/test split), if None, test all samples
+test_sample_num: 500  # number of samples to test (only work in dev/test split), if None, test all samples
 random_sample: False # whether to randomly sample the test samples
 
 # Seed for reproducibility
@@ -56,9 +56,11 @@ retrieval_topk: 5 # number of retrieved documents
 retrieval_batch_size: 256  # batch size for retrieval
 retrieval_use_fp16: True  # whether to use fp16 for retriAFeval model
 retrieval_query_max_length: 128  # max length of the query
+
 save_retrieval_cache: False # whether to save the retrieval cache
-use_retrieval_cache: False # whether to use the retrieval cache
-retrieval_cache_path: ~ # path to the retrieval cache
+use_retrieval_cache: True # whether to use the retrieval cache
+retrieval_cache_path: "/shared/data3/yichi9/FlashRAG_output/hotpotqa_2024_11_03_23_59_Baseline/retrieval_cache.json" # path to the retrieval cache
+
 retrieval_pooling_method: ~ # set automatically if not provided
 bm25_backend: bm25s # pyserini, bm25s
 use_sentence_transformer: False
@@ -89,7 +91,7 @@ generation_params:
   #temperature: 1.0
   #top_p: 1.0
 use_fid: False # whether to use FID, only valid in encoder-decoder model
-gpu_memory_utilization: 0.7 # ratio of gpu's memory usage for generator
+gpu_memory_utilization: 0.85 # ratio of gpu's memory usage for generator
 
 # -------------------------------------------------Evaluation Settings------------------------------------------------#
 # Metrics to evaluate the result

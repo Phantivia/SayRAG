@@ -91,21 +91,21 @@ def process_reflection_response(idx:int, response:str):
             'idx': idx,
             'succeed': False,
             'response': response,
-            'extra_query': '',
+            'reflection': '',
             'confidence': -1,
         }
-    if not (("Question: " in response) and ("Confidence: " in response)):
+    if not (("Self-reflection: " in response) and ("Confidence: " in response)):
         print(f"{idx}: Error happened in making reflection for idx - Skipped")
         return r
         
-    _response = response.replace("Question: ", SPLIT).replace("Confidence: ", SPLIT)
-    parts = _response.split(SPLIT)
+    response = response.replace("Self-reflection: ", SPLIT).replace("Confidence: ", SPLIT)
+    parts = response.split(SPLIT)
     if len(parts) != 3:  
         print(f"{idx}: Error happened in spliting reflection for idx - Skipped")
         return r  
     
-    _, confidence_str, question = parts
-    question = question.strip()
+    response, reflection, confidence_str = parts
+    
     try:
         confidence = int(confidence_str.strip())  
     except ValueError:  
@@ -117,20 +117,20 @@ def process_reflection_response(idx:int, response:str):
         'idx': idx,
         'succeed': True,
         'response': response,
-        'extra_query': question,
+        'reflection': reflection,
         'confidence': confidence,
     }
     return r
 
 
-def generate_reflections(reflection_model: LLM, sampling_params,
+def generate_reflections(reflection_model: LLM, 
                      dataset:flashrag.dataset.dataset.Dataset, split = 'dev', key='question', 
                      output = './reflection.jsonl',
                      max_reroll=3):
     
-    
+    sampling_params = SamplingParams(temperature=0.8, max_tokens=1024)
     queries = dataset[split].__getattribute__(key)
-    outputs = reflection_model.generate(queries, sampling_params = sampling_params)
+    outputs = reflection_model.generate(queries, sampling_params = sampling_params,)
 
     responses = [output.outputs[0].text for output in outputs]
     results = [process_reflection_response(idx, response) for idx, response in enumerate(responses)]
@@ -167,11 +167,11 @@ class SayRAGPipeline(SequentialPipeline):
             user_prompt="Question: {question}",
         )
     
-    def get_prompt(self, question, retrieval_result, extra_retrieval_result,
+    def get_prompt(self, question, retrieval_result, reflection_retrieval_result,
                        reflection_result, min_confidence_run_naive, min_confidence_drop_reflection,
-                       topk:int, augument_num:int):
+                       topk:int, augumented_num:int):
             
-            if (not reflection_result['succeed']) or (reflection_result['confidence'] >= min_confidence_drop_reflection):
+            if not reflection_result['succeed'] or reflection_result['confidence'] >= min_confidence_drop_reflection:
                 prompt = self.prompt_template.get_string(question=question, retrieval_result=retrieval_result)
                 return prompt
 
@@ -179,14 +179,14 @@ class SayRAGPipeline(SequentialPipeline):
                 prompt = self.zero_shot_templete.get_string(question=question)
                 return prompt
             
-            query_retrieval_num = topk - augument_num
+            query_retrieval_num = topk - augumented_num
             query_retrieval = retrieval_result[:query_retrieval_num]
-            extra_retrieval_result = [r for r in extra_retrieval_result if r not in query_retrieval]
-            augument_num = min(len(extra_retrieval_result), augument_num)
+            reflection_retrieval_result = [r for r in reflection_retrieval_result if r not in query_retrieval]
+            augumented_num = min(len(reflection_retrieval_result), augumented_num)
             
-            query_retrieval_num = topk - augument_num
+            query_retrieval_num = topk - augumented_num
             query_retrieval = retrieval_result[:query_retrieval_num]
-            reflection_retrieval = extra_retrieval_result[:augument_num]
+            reflection_retrieval = reflection_retrieval_result[:augumented_num]
             augumented_result = query_retrieval + reflection_retrieval
             prompt = self.prompt_template.get_string(question=question, retrieval_result=augumented_result)
             
@@ -194,39 +194,40 @@ class SayRAGPipeline(SequentialPipeline):
     
     def run(self, dataset, do_eval=True, pred_process_fun=None,
             reflection_path:str='./reflection.jsonl', 
-            augument_ratio:float=1.0,
+            ratio_augumented:float=1.0,
             min_confidence_run_naive:int=114514, 
-            min_confidence_drop_reflection:int=10,
-            ):
+            min_confidence_drop_reflection:int=114514, 
+            add_query_to_reflection:bool=True):
         
         input_query = dataset.question
         
         assert os.path.isfile(reflection_path)
-        all_reflections = read_jsonl(reflection_path)
-        all_reflections = {ref['idx']:ref for ref in all_reflections}
+        reflections = read_jsonl(reflection_path)
+        reflection_query = [r['reflection'] for r in reflections]
+        
+        if add_query_to_reflection:
+            reflection_query = [q +'\n'+ r for q,r in zip(input_query, reflection_query)]
+        
+        augumented_num = int(self.retriever.topk * ratio_augumented)
 
-        idxs = [int(idx.split('_')[1]) for idx in dataset.id]
-        reflections = [all_reflections[idx] for idx in idxs]
-        
-        extra_query = [r['extra_query'] for r in reflections]
-        dataset.update_output("extra_query", extra_query)
-        
-        extra_retrieval_result = [ref['retrieval_result'] for ref in reflections]
-        dataset.update_output("extra_retrieval_result", extra_retrieval_result)
+        if not add_query_to_reflection:
+            reflection_retrieval_results = [ref['reflection_retrieval_result'] for ref in reflections]
+        elif add_query_to_reflection:
+            reflection_retrieval_results = [ref['reflection_retrieval_result_with_query'] for ref in reflections]
             
-        retrieval_result = self.retriever.batch_search(input_query)
-        dataset.update_output("retrieval_result", retrieval_result)
-        
-        augument_num = int(self.retriever.topk * augument_ratio)
+        dataset.update_output("reflection_retrieval_results", reflection_retrieval_results)
+            
+        retrieval_results = self.retriever.batch_search(input_query)
+        dataset.update_output("retrieval_results", retrieval_results)
             
         input_prompts = [
-            self.get_prompt(question, retrieval_result, extra_retrieval_result, reflection_result, 
+            self.get_prompt(question, retrieval_result, reflection_retrieval_result, reflection_result, 
                             min_confidence_run_naive, min_confidence_drop_reflection, 
-                            self.retriever.topk, augument_num)
-            for question, retrieval_result, extra_retrieval_result, reflection_result
+                            self.retriever.topk, augumented_num)
+            for question, retrieval_result, reflection_retrieval_result, reflection_result
             in zip(dataset.question, 
-                   dataset.retrieval_result,
-                   dataset.extra_retrieval_result,
+                   dataset.retrieval_results,
+                   dataset.reflection_retrieval_results,
                    reflections)
         ]
         dataset.update_output("prompt", input_prompts)
